@@ -86,7 +86,7 @@ func (st *TCPConnectionPool) GetATCPConn() *TCPConnection {
 
 // 初始化连接池
 // 参数 : TCP 服务 addr , 多个使用逗号分隔
-func InitTCPConnetionPool(addr string, capacity int) *TCPConnectionPool {
+func InitTCPConnetionPool(addr string, capacity int) (*TCPConnectionPool, error) {
 	addrs := strings.Split(addr, ",")
 	addrSize := len(addrs)
 	tcpConnectionPool := &TCPConnectionPool{
@@ -116,9 +116,9 @@ func InitTCPConnetionPool(addr string, capacity int) *TCPConnectionPool {
 	}
 	// 没有成功的连接或者错误率极高
 	if errNumder >= 5 {
-		panic("TCP连接池初始化失败 : 无法连接TCP服务器。")
+		return nil, errors.New("TCP连接池初始化失败 : 无法连接TCP服务器。")
 	}
-	return tcpConnectionPool
+	return tcpConnectionPool, nil
 }
 
 // 连接 TCP 服务

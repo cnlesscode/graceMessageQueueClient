@@ -2,93 +2,166 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"runtime"
-	"strconv"
-	"sync"
+	"errors"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/cnlesscode/graceMessageQueueClient/client"
+	"github.com/cnlesscode/gotool/random"
+	"gopkg.in/ini.v1"
 )
 
-// 初始化连接池
-var addr string = "192.168.1.100:3001"
-var TCPConnetionPool = client.InitTCPConnetionPool(addr, 300)
+var connections = make([]*net.TCPConn, 0)
+var connsUsed = make([]*net.TCPConn, 0)
+var appRoot string = ""
+var separator string = string(os.PathSeparator)
 
 func main() {
-	go func() {
-		for {
-			time.Sleep(time.Second * 3)
-			fmt.Printf("连接数: %v\n", len(TCPConnetionPool.Channel))
-			fmt.Printf("runtime.NumGoroutine(): %v\n", runtime.NumGoroutine())
-		}
-	}()
-
-	// 创建话题
-	//CreateTopic("topic1")
-
-	// 生产消息
-	ProductMessage()
-
-	// 消费消息
-	// ConsumeTopic("topic1")
-}
-
-// 消费话题
-func ConsumeTopic(topic string) {
-	for {
-		message := client.Message{
-			Type:  2,
-			Topic: topic,
-		}
-		messageByte, _ := json.Marshal(message)
-		err := TCPConnetionPool.SendMessage(messageByte, func(data []byte) error {
-			fmt.Printf("data: %v\n", string(data))
-			return nil
-		})
-		fmt.Printf("err: %v\n", err)
+	// 分析命令
+	args := os.Args
+	argsLength := len(args)
+	if argsLength < 2 {
+		PrintHelp()
+		return
+	}
+	println("")
+	println("------ Welcome To Use Grace TCP Client  ------")
+	// 初始化项目目录
+	exePath, err := os.Executable()
+	if err != nil {
+		panic("项目目录初始化失败")
+	}
+	absFilePath, err := filepath.EvalSymlinks(filepath.Dir(exePath))
+	if err != nil {
+		panic("项目目录初始化失败")
+	}
+	appRoot = absFilePath + separator
+	configFile := appRoot + "config.ini"
+	iniFile, err := ini.Load(configFile)
+	if err != nil {
+		println("------ TCP 服务配置读取失败  ------")
+		return
+	}
+	// 字符串类型
+	tcpAddrString := iniFile.Section("").Key("tcp-addr").String()
+	addrs := strings.Split(tcpAddrString, ",")
+	// 连接 TCP 服务
+	for _, addr := range addrs {
+		conn, err := ConnectTCP(addr)
 		if err != nil {
+			println("------ TCP : " + addr + " 连接失败  ------")
 			return
 		}
+		connections = append(connections, conn)
+		defer conn.Close()
+	}
+	// 检查连接成功数量
+	connectedSize := len(connections)
+	command := args[1]
+	commandArgs := args[2:]
+	commandArgsLength := len(commandArgs)
+	// 随机选择一个连接
+	connForUse := connections[random.RangeIntRand(0, int64(connectedSize)-1)]
+	// 1. 生产消息
+	if command == "product" {
+		if commandArgsLength < 2 {
+			println("命令参数错误")
+			return
+		}
+		message := Message{Type: 1, Topic: commandArgs[0], Data: commandArgs[1]}
+		sendMessage(connForUse, message)
+	} else if command == "consume" { // 2. 消费消息
+		if commandArgsLength < 2 {
+			println("命令参数错误")
+			return
+		}
+		message := Message{Type: 2, Topic: commandArgs[0], ConsumerGroup: commandArgs[1]}
+		sendMessage(connForUse, message)
+	} else if command == "create-topic" { // 3. 创建话题
+		if commandArgsLength < 1 {
+			println("请输入话题名称")
+			return
+		}
+		message := Message{Type: 3, Topic: commandArgs[0]}
+		for _, conn := range connections {
+			sendMessage(conn, message)
+		}
+	} else if command == "topics" { //4. 话题列表
+		message := Message{Type: 4}
+		for _, conn := range connections {
+			sendMessage(conn, message)
+		}
+	} else if command == "status" { //5. 查看状态
+		message := Message{Type: 5}
+		for _, conn := range connections {
+			sendMessage(conn, message)
+		}
+	}
+
+	// 监听消息
+	for _, conn := range connsUsed {
+		buf := make([]byte, 2048)
+		n, _ := conn.Read(buf)
+		buf = buf[0:n]
+		println(conn.RemoteAddr().String() + " 响应结果 :")
+		println(string(buf))
+		println("------------------------------------------------")
+		println("")
 	}
 
 }
 
-// 创建话题
-func CreateTopic(topic string) {
-	message := client.Message{
-		Type:  3,
-		Topic: topic,
-	}
-	messageByte, _ := json.Marshal(message)
-	err := TCPConnetionPool.SendMessage(messageByte, nil)
+// 发送消息结构体
+type Message struct {
+	Type          int
+	Topic         string
+	ConsumerGroup string
+	Data          string
+}
+
+// 发送消息
+func sendMessage(conn *net.TCPConn, message Message) error {
+	messageByte, err := json.Marshal(message)
 	if err != nil {
-		fmt.Printf("err: %v\n", err)
-	} else {
-		println("话题创建成功")
+		return err
 	}
+	_, err = conn.Write(messageByte)
+	if err != nil {
+		println("命令执行失败，错误 :")
+		println(err.Error())
+	}
+	connsUsed = append(connsUsed, conn)
+	return nil
 }
 
-// 生产消息示例
-func ProductMessage() {
-	// 多协程并行发送
-	var wg sync.WaitGroup
-	for ii := 1; ii <= 50000; ii++ {
-		wg.Add(1)
-		go func(stp int) {
-			defer wg.Done()
-			message := client.Message{
-				Type:  1,
-				Topic: "topic1",
-				Data:  "[ " + strconv.Itoa(stp) + " ] 测试消息",
-			}
-			messageByte, _ := json.Marshal(message)
-			err := TCPConnetionPool.SendMessage(messageByte, nil)
-			if err != nil {
-				fmt.Printf("err: %v\n", err)
-			}
-		}(ii)
+// 打印 help
+func PrintHelp() {
+	println("")
+	println("- 命令提示 :")
+	println("  功能       命令            参数")
+	println("- 查看话题   topics")
+	println("例: ./TCPClient.exe topics")
+	println("- 创建话题   create-topic   话题名称")
+	println("例: ./TCPClient.exe create-topic topic02")
+	println("- 生产消息   product        话题名称 消息内容")
+	println("例: ./TCPClient.exe product topic01 hello...")
+	println("- 消费话题   consume        话题名称 消费者组 消费条目数 ")
+	println("例: ./TCPClient.exe consume topic01 default")
+	println("- 查看服务   status")
+	println("例: ./TCPClient.exe status")
+}
+
+// 连接 TCP 服务
+func ConnectTCP(tcpAddrString string) (*net.TCPConn, error) {
+	conn, err := net.DialTimeout("tcp", tcpAddrString, time.Second*3)
+	if err != nil {
+		return nil, err
 	}
-	wg.Wait()
-	println("-------- 消息生产完毕 -------")
+	connTcp, ok := conn.(*net.TCPConn)
+	if ok {
+		return connTcp, nil
+	}
+	return nil, errors.New("fail")
 }

@@ -1,0 +1,4 @@
+github.com/cnlesscode/gotool v1.6.9 h1:o2dyssJNdaowDFacU00Oa0mCF3DQfallLjWXz1o20hg=
+github.com/cnlesscode/gotool v1.6.9/go.mod h1:kllqR0ZQavhC3b00o7/s5xBQv+iTVr00MoAvtaX+/d4=
+github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
+github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=

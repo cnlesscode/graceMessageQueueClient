@@ -98,6 +98,13 @@ func main() {
 		for _, conn := range connections {
 			sendMessage(conn, message)
 		}
+	} else if command == "create-consumer-group" {
+		if commandArgsLength < 2 {
+			println("命令参数错误")
+			return
+		}
+		message := Message{Type: 6, Topic: commandArgs[0], ConsumerGroup: commandArgs[1]}
+		sendMessage(connForUse, message)
 	}
 
 	// 监听消息
@@ -149,6 +156,8 @@ func PrintHelp() {
 	println("例: ./TCPClient.exe product topic1 hello...")
 	println("- 消费话题   consume        话题名称 消费者组 消费条目数 ")
 	println("例: ./TCPClient.exe consume topic1 default")
+	println("- 创建消费者组   create-consumer-group 话题名称 消费者组")
+	println("例: ./TCPClient.exe create-consumer-group topic1 consumer_group_1")
 	println("- 查看服务   status")
 	println("例: ./TCPClient.exe status")
 }

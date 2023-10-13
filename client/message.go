@@ -2,7 +2,6 @@ package client
 
 import (
 	"errors"
-	"fmt"
 )
 
 // 发送消息结构体
@@ -75,7 +74,6 @@ SendMessageTip:
 			tcpConnectionST.Status = false
 			// 无效的连接放回连接池
 			// 系统会自动重连
-			fmt.Printf("\"okkk\": %v\n", "okkk")
 			st.Channel <- tcpConnectionST
 		}
 		if doNumber < st.AddressesLen+1 {

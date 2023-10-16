@@ -152,17 +152,17 @@ func PrintHelp() {
 	println("- 命令提示 :")
 	println("  功能       命令            参数")
 	println("- 查看话题   topics")
-	println("例: ./TCPClient.exe topics")
+	println("例: ./GMQClient topics")
 	println("- 创建话题   create-topic   话题名称")
-	println("例: ./TCPClient.exe create-topic topic1")
+	println("例: ./GMQClient create-topic topic1")
 	println("- 生产消息   product        话题名称 消息内容")
-	println("例: ./TCPClient.exe product topic1 hello...")
+	println("例: ./GMQClient product topic1 hello...")
 	println("- 消费话题   consume        话题名称 消费者组 消费条目数 ")
-	println("例: ./TCPClient.exe consume topic1 default")
+	println("例: ./GMQClient consume topic1 default")
 	println("- 创建消费者组   create-consumer-group 话题名称 消费者组")
-	println("例: ./TCPClient.exe create-consumer-group topic1 consumer_group_1")
+	println("例: ./GMQClient create-consumer-group topic1 consumer_group_1")
 	println("- 查看服务   status")
-	println("例: ./TCPClient.exe status")
+	println("例: ./GMQClient status")
 }
 
 // 连接 TCP 服务

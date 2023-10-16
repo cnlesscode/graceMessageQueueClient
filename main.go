@@ -103,8 +103,11 @@ func main() {
 			println("命令参数错误")
 			return
 		}
+		// 遍历集群
 		message := Message{Type: 6, Topic: commandArgs[0], ConsumerGroup: commandArgs[1]}
-		sendMessage(connForUse, message)
+		for _, conn := range connections {
+			sendMessage(conn, message)
+		}
 	}
 
 	// 监听消息

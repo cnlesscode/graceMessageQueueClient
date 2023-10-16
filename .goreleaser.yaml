@@ -16,7 +16,7 @@ before:
     # - go generate ./...
 
 
-project_name: TCPClient
+project_name: GMQClient
 
 
 builds:
@@ -31,7 +31,7 @@ archives:
   - format: zip
     # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
-      TCPClient_
+      GMQClient_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386

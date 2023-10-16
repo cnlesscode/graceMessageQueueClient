@@ -91,6 +91,8 @@ fillTip:
 	// 循环检查服务可用性
 	go func() {
 		for {
+			// 此处需要延迟，否则会不断连接、断开 TCP 服务
+			time.Sleep(time.Second * 5)
 			tcpConnectionPool.checkAddrsIsAvailable()
 		}
 	}()
@@ -98,8 +100,13 @@ fillTip:
 	// 检查连接池
 	go func() {
 		for {
-			// 延迟 50 毫秒，避免过分抢占资源
-			time.Sleep(time.Millisecond * 50)
+			// 延迟 3 秒，避免过分抢占资源
+			time.Sleep(time.Second * 3)
+			// 检查闲置数量
+			if (len(tcpConnectionPool.Channel)) < (tcpConnectionPool.Capacity / 2) {
+				time.Sleep(time.Second * 3)
+				continue
+			}
 			tcpConnection := <-tcpConnectionPool.Channel
 			// 服务不可用
 			if tcpConnection.Conn == nil || !tcpConnection.Status {

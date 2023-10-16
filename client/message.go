@@ -20,7 +20,7 @@ type ResponseFunc func(data []byte) error
 func (st *TCPConnectionPool) SendMessage(message []byte, responseFunc ResponseFunc) error {
 	doNumber := 1
 SendMessageTip:
-	tcpConnectionST := st.GetAConnFromChannel()
+	tcpConnectionST := <-st.Channel
 	// fmt.Printf(
 	// 	"ServerAddr:%v CurrentServerAddr:%v Status:%v CurrentServerIndex:%v ServerIndex:%v\n",
 	// 	tcpConnectionST.ServerAddr,

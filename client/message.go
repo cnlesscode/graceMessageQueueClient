@@ -1,7 +1,10 @@
 package client
 
 import (
-	"errors"
+	"encoding/json"
+	"net"
+	"strings"
+	"time"
 )
 
 // 发送消息结构体
@@ -9,15 +12,106 @@ type Message struct {
 	Type          int
 	Topic         string
 	ConsumerGroup string
-	Data          string
+	Data          any
 }
 
-// 发送接收消息
-// 收到响应后执行的函数
-type ResponseFunc func(data []byte) error
+// 响应消息结构体
+type ResponseMessage struct {
+	Errcode int    `json:"errcode"`
+	Data    string `json:"data"`
+}
 
-// 发送消息
-func (st *TCPConnectionPool) SendMessage(message []byte, responseFunc ResponseFunc) error {
+// 1 查看话题
+func (st *GraceMQConnectionPool) ListTopics() ResponseMessage {
+	// 查询话题列表
+	message := Message{
+		Type: 4,
+	}
+	messageByte, _ := json.Marshal(message)
+	return st.SendMessageBase(messageByte)
+}
+
+// 2 创建话题
+func (st *GraceMQConnectionPool) CreateTopic(topic string) ResponseMessage {
+	successedRes := make([]string, 0)
+	filedRes := make([]string, 0)
+	responseMessage := ResponseMessage{
+		Errcode: 0,
+		Data:    "",
+	}
+	// 集群创建话题
+	for _, addr := range st.Addresses {
+		conn, err := net.DialTimeout("tcp", addr.Addr, time.Second*5)
+		if err != nil {
+			filedRes = append(filedRes, addr.Addr+" 连接失败")
+			continue
+		} else {
+			// 查询话题列表
+			message := Message{
+				Type:  3,
+				Topic: topic,
+			}
+			messageByte, _ := json.Marshal(message)
+			// 写消息
+			_, err := conn.Write(messageByte)
+			if err != nil {
+				filedRes = append(filedRes, addr.Addr+" 请求失败")
+				continue
+			}
+			// 等待响应
+			// 监听服务端响应
+			buf := make([]byte, 3072)
+			n, err := conn.Read(buf)
+			if err != nil {
+				filedRes = append(filedRes, addr.Addr+" 创建话题失败")
+				continue
+			}
+			// 执行成功
+			conn.Close()
+			// 解析消息
+			buf = buf[0:n]
+			err = json.Unmarshal(buf, &responseMessage)
+			if err == nil {
+				successedRes = append(successedRes, addr.Addr+" "+responseMessage.Data)
+			} else {
+				responseMessage.Errcode = 400440
+				filedRes = append(filedRes, addr.Addr+" 创建话题失败")
+			}
+		}
+	}
+	responseMessage.Data = strings.Join(successedRes, ",") + "\n" + strings.Join(filedRes, ",")
+	return responseMessage
+}
+
+// 生产消息
+func (st *GraceMQConnectionPool) ProductMessage(topic string, data any) ResponseMessage {
+	message := Message{
+		Type:  1,
+		Topic: topic,
+		Data:  data,
+	}
+	messageByte, _ := json.Marshal(message)
+	return st.SendMessageBase(messageByte)
+
+}
+
+// 生产消息
+func (st *GraceMQConnectionPool) ConsumeMessage(topic string) ResponseMessage {
+	message := Message{
+		Type:  2,
+		Topic: topic,
+	}
+	messageByte, _ := json.Marshal(message)
+	return st.SendMessageBase(messageByte)
+
+}
+
+// 发送消息基础函数
+func (st *GraceMQConnectionPool) SendMessageBase(message []byte) ResponseMessage {
+	responseMessage := ResponseMessage{
+		Errcode: 0,
+		Data:    "",
+	}
 	doNumber := 1
 SendMessageTip:
 	tcpConnectionST := <-st.Channel
@@ -42,7 +136,9 @@ SendMessageTip:
 			doNumber++
 			goto SendMessageTip
 		} else {
-			return errors.New("消息发送失败 : 服务端连接失败")
+			responseMessage.Errcode = 400400
+			responseMessage.Data = "消息发送失败 : 服务端连接失败"
+			return responseMessage
 		}
 	}
 
@@ -61,7 +157,9 @@ SendMessageTip:
 			doNumber++
 			goto SendMessageTip
 		}
-		return err
+		responseMessage.Errcode = 400410
+		responseMessage.Data = "消息发送失败"
+		return responseMessage
 	}
 
 	// 监听服务端响应
@@ -80,18 +178,19 @@ SendMessageTip:
 			doNumber++
 			goto SendMessageTip
 		}
-		return err
+		responseMessage.Errcode = 400430
+		responseMessage.Data = "服务端已断开"
+		return responseMessage
 	}
 
 	// 执行成功
 	st.Channel <- tcpConnectionST
 	buf = buf[0:n]
-
-	// 是否需要等待应答
-	if responseFunc == nil {
-		return nil
+	err = json.Unmarshal(buf, &responseMessage)
+	if err == nil {
+		return responseMessage
 	}
-
-	return responseFunc(buf)
-
+	responseMessage.Errcode = 400440
+	responseMessage.Data = "响应消息格式错误"
+	return responseMessage
 }

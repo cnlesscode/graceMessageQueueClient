@@ -29,7 +29,7 @@ type TCPConnectionAddr struct {
 }
 
 // 连接池结构体
-type TCPConnectionPool struct {
+type GraceMQConnectionPool struct {
 	// 默认 TCP 服务地址
 	Addresses []*TCPConnectionAddr
 	// TCP 服务地址数量
@@ -42,7 +42,7 @@ type TCPConnectionPool struct {
 
 // 初始化连接池
 // 参数 : TCP 服务 addr , 多个使用逗号分隔
-func InitTCPConnetionPool(addr string, capacity int) (*TCPConnectionPool, error) {
+func Init(addr string, capacity int) *GraceMQConnectionPool {
 
 	// 整理服务地址
 	addrs := strings.Split(addr, ",")
@@ -59,7 +59,7 @@ func InitTCPConnetionPool(addr string, capacity int) (*TCPConnectionPool, error)
 	}
 
 	// 初始化连接池结构体
-	tcpConnectionPool := &TCPConnectionPool{
+	tcpConnectionPool := &GraceMQConnectionPool{
 		Addresses:    TCPConnectionAddrs,
 		AddressesLen: len(addrs),
 		Channel:      make(chan *TCPConnection, capacity),
@@ -140,11 +140,11 @@ fillTip:
 	}()
 
 	// 返回连接池
-	return tcpConnectionPool, nil
+	return tcpConnectionPool
 }
 
 // 获取一个可用的连接
-func (st *TCPConnectionPool) GetAnAvailableConn(index int) (*TCPConnection, error) {
+func (st *GraceMQConnectionPool) GetAnAvailableConn(index int) (*TCPConnection, error) {
 	// 当前服务可用
 	if st.Addresses[index].Status {
 		conn, err := net.DialTimeout("tcp", st.Addresses[index].Addr, time.Second*5)
@@ -164,7 +164,7 @@ func (st *TCPConnectionPool) GetAnAvailableConn(index int) (*TCPConnection, erro
 }
 
 // 查询一个可用的服务
-func (st *TCPConnectionPool) FinAnAvailableConn(index int) (*TCPConnection, error) {
+func (st *GraceMQConnectionPool) FinAnAvailableConn(index int) (*TCPConnection, error) {
 	tcpConnection := &TCPConnection{
 		ServerAddr:         st.Addresses[index].Addr,
 		ServerIndex:        index,
@@ -198,7 +198,7 @@ func (st *TCPConnectionPool) FinAnAvailableConn(index int) (*TCPConnection, erro
 }
 
 // 检查服务可用性
-func (st *TCPConnectionPool) checkAddrsIsAvailable() int {
+func (st *GraceMQConnectionPool) checkAddrsIsAvailable() int {
 	canUseAddressesLen := 0
 	for _, addr := range st.Addresses {
 		conn, err := net.DialTimeout("tcp", addr.Addr, time.Second*5)

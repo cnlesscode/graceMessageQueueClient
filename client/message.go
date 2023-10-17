@@ -27,8 +27,7 @@ func (st *GraceMQConnectionPool) ListTopics() ResponseMessage {
 	message := Message{
 		Type: 4,
 	}
-	messageByte, _ := json.Marshal(message)
-	return st.SendMessageBase(messageByte)
+	return st.SendMessageBase(message)
 }
 
 // 2 创建话题
@@ -90,24 +89,23 @@ func (st *GraceMQConnectionPool) ProductMessage(topic string, data any) Response
 		Topic: topic,
 		Data:  data,
 	}
-	messageByte, _ := json.Marshal(message)
-	return st.SendMessageBase(messageByte)
+	return st.SendMessageBase(message)
 
 }
 
 // 生产消息
-func (st *GraceMQConnectionPool) ConsumeMessage(topic string) ResponseMessage {
+func (st *GraceMQConnectionPool) ConsumeMessage(topic, consumerGroup string) ResponseMessage {
 	message := Message{
-		Type:  2,
-		Topic: topic,
+		Type:          2,
+		Topic:         topic,
+		ConsumerGroup: consumerGroup,
 	}
-	messageByte, _ := json.Marshal(message)
-	return st.SendMessageBase(messageByte)
-
+	return st.SendMessageBase(message)
 }
 
 // 发送消息基础函数
-func (st *GraceMQConnectionPool) SendMessageBase(message []byte) ResponseMessage {
+func (st *GraceMQConnectionPool) SendMessageBase(messageSt Message) ResponseMessage {
+	message, _ := json.Marshal(messageSt)
 	responseMessage := ResponseMessage{
 		Errcode: 0,
 		Data:    "",

@@ -3,7 +3,7 @@ module github.com/cnlesscode/graceMessageQueueClient
 go 1.21.1
 
 require (
-	github.com/cnlesscode/gotool v1.6.9
+	github.com/cnlesscode/gotool v1.7.1
 	gopkg.in/ini.v1 v1.67.0
 )
 

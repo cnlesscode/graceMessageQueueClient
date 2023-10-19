@@ -59,7 +59,7 @@ func (st *GraceMQConnectionPool) CreateTopic(topic string) ResponseMessage {
 			}
 			// 等待响应
 			// 监听服务端响应
-			buf := make([]byte, 3072)
+			buf := make([]byte, 5120)
 			n, err := conn.Read(buf)
 			if err != nil {
 				filedRes = append(filedRes, addr.Addr+" 创建话题失败")

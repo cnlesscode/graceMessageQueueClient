@@ -22,16 +22,16 @@ type ResponseMessage struct {
 }
 
 // 1 查看话题
-func (st *GraceMQConnectionPool) ListTopics() ResponseMessage {
+func (st *GraceTCPConnectionPool) ListTopics() ResponseMessage {
 	// 查询话题列表
 	message := Message{
 		Type: 4,
 	}
-	return st.SendMessageBase(message)
+	return st.SendAndReceive(message)
 }
 
 // 2 创建话题
-func (st *GraceMQConnectionPool) CreateTopic(topic string) ResponseMessage {
+func (st *GraceTCPConnectionPool) CreateTopic(topic string) ResponseMessage {
 	successedRes := make([]string, 0)
 	filedRes := make([]string, 0)
 	responseMessage := ResponseMessage{
@@ -83,32 +83,37 @@ func (st *GraceMQConnectionPool) CreateTopic(topic string) ResponseMessage {
 }
 
 // 生产消息
-func (st *GraceMQConnectionPool) ProductMessage(topic string, data any) ResponseMessage {
+func (st *GraceTCPConnectionPool) ProductMessage(topic string, data any) ResponseMessage {
 	message := Message{
 		Type:  1,
 		Topic: topic,
 		Data:  data,
 	}
-	return st.SendMessageBase(message)
+	return st.SendAndReceive(message)
 
 }
 
 // 生产消息
-func (st *GraceMQConnectionPool) ConsumeMessage(topic, consumerGroup string) ResponseMessage {
+func (st *GraceTCPConnectionPool) ConsumeMessage(topic, consumerGroup string) ResponseMessage {
 	message := Message{
 		Type:          2,
 		Topic:         topic,
 		ConsumerGroup: consumerGroup,
 	}
-	return st.SendMessageBase(message)
+	return st.SendAndReceive(message)
 }
 
 // 发送消息基础函数
-func (st *GraceMQConnectionPool) SendMessageBase(messageSt Message) ResponseMessage {
-	message, _ := json.Marshal(messageSt)
+func (st *GraceTCPConnectionPool) SendAndReceive(message any) ResponseMessage {
 	responseMessage := ResponseMessage{
 		Errcode: 0,
 		Data:    "",
+	}
+	messageByte, err := json.Marshal(message)
+	if err != nil {
+		responseMessage.Errcode = 500500
+		responseMessage.Data = "消息数据错误"
+		return responseMessage
 	}
 	doNumber := 1
 SendMessageTip:
@@ -141,7 +146,7 @@ SendMessageTip:
 	}
 
 	// 写消息
-	_, err := tcpConnectionST.Conn.Write(message)
+	_, err = tcpConnectionST.Conn.Write(messageByte)
 	if err != nil {
 		// 写入失败
 		// 如果连接来自连接池，更新连接状态

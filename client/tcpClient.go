@@ -25,7 +25,6 @@ func New(addr string) (*TCPConnection, error) {
 
 // 发生及接收消息
 func (st *TCPConnection) SendAndReceive(message any, toJson bool) ([]byte, error) {
-
 	if st.Conn == nil {
 		return nil, errors.New("TCP 服务错误")
 	}

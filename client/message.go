@@ -131,6 +131,8 @@ WriteMsgTip:
 			doNumber++
 			tcpConnectionSTNew, err := st.GetAnAvailableConn(tcpConnectionST.CurrentServerIndex)
 			if err == nil {
+				tcpConnectionSTNew.ServerAddr = tcpConnectionST.ServerAddr
+				tcpConnectionSTNew.ServerIndex = tcpConnectionST.ServerIndex
 				tcpConnectionST = &tcpConnectionSTNew
 				goto WriteMsgTip
 			}
@@ -146,9 +148,21 @@ WriteMsgTip:
 
 	// err != nil 代表服务端断开
 	if err != nil {
-		responseMessage.Errcode = 400430
-		responseMessage.Data = "服务端已断开"
-		return responseMessage
+		if doNumber < 2 {
+			doNumber++
+			// 新建一个连接
+			tcpConnectionSTNew, err := st.GetAnAvailableConn(tcpConnectionST.CurrentServerIndex)
+			if err == nil {
+				tcpConnectionSTNew.ServerAddr = tcpConnectionST.ServerAddr
+				tcpConnectionSTNew.ServerIndex = tcpConnectionST.ServerIndex
+				tcpConnectionST = &tcpConnectionSTNew
+			}
+			goto WriteMsgTip
+		} else {
+			responseMessage.Errcode = 400430
+			responseMessage.Data = "服务端已断开"
+			return responseMessage
+		}
 	}
 	buf = buf[0:n]
 	err = json.Unmarshal(buf, &responseMessage)

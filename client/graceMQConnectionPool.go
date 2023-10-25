@@ -60,14 +60,14 @@ func Init(addr string, capacity int) *GraceTCPConnectionPool {
 
 	// 立即检查服务可用性
 	canUseAddressesLen := tcpConnectionPool.checkAddrsIsAvailable()
-	if canUseAddressesLen < tcpConnectionPool.AddressesLen {
-		panic("TCP 服务不可用")
+	if canUseAddressesLen < 1 {
+		panic("无可用 TCP服务")
 	}
 
 	// 循环检查TCP服务
 	go func() {
 		for {
-			time.Sleep(time.Second * 3)
+			time.Sleep(time.Second * 2)
 			tcpConnectionPool.checkAddrsIsAvailable()
 		}
 	}()
@@ -95,21 +95,24 @@ fillTip:
 // 获取一个可用的连接
 func (st *GraceTCPConnectionPool) GetAnAvailableConn(index int) (TCPConnection, error) {
 	// 当前服务可用
-	conn, err := net.DialTimeout("tcp", st.Addresses[index], time.Second*5)
-	tcpConnection := TCPConnection{
-		ServerAddr:         st.Addresses[index],
-		ServerIndex:        index,
-		CurrentServerAddr:  st.Addresses[index],
-		CurrentServerIndex: index,
-		Conn:               conn,
-	}
-	if err == nil {
-		return tcpConnection, nil
+	status, ok := ServerStatus[st.Addresses[index]]
+	if ok && status {
+		conn, err := net.DialTimeout("tcp", st.Addresses[index], time.Second*5)
+		tcpConnection := TCPConnection{
+			ServerAddr:         st.Addresses[index],
+			ServerIndex:        index,
+			CurrentServerAddr:  st.Addresses[index],
+			CurrentServerIndex: index,
+			Conn:               conn,
+		}
+		if err == nil {
+			return tcpConnection, nil
+		}
 	}
 	// 当前服务不可用，找到可用的服务
 	// 非集群模式
-	if st.AddressesLen < 1 {
-		return tcpConnection, errors.New("TCP 服务不可用")
+	if st.AddressesLen < 2 {
+		return TCPConnection{}, errors.New("TCP 服务不可用")
 	}
 	// 集群模式继续寻找
 	return st.FinAnAvailableConn(index)
@@ -124,19 +127,22 @@ func (st *GraceTCPConnectionPool) FinAnAvailableConn(index int) (TCPConnection, 
 		CurrentServerIndex: index,
 	}
 	nextIndex := index + 1
-	var err error
+	var err error = errors.New("无可用TCP服务")
 	var conn net.Conn
 	for {
 		if nextIndex >= st.AddressesLen {
 			nextIndex = 0
 		}
-		// 尝试连接
-		conn, err = net.DialTimeout("tcp", st.Addresses[nextIndex], time.Second*5)
-		if err == nil {
-			tcpConnection.CurrentServerAddr = st.Addresses[nextIndex]
-			tcpConnection.CurrentServerIndex = nextIndex
-			tcpConnection.Conn = conn
-			break
+		status, ok := ServerStatus[st.Addresses[nextIndex]]
+		if status && ok {
+			// 尝试连接
+			conn, err = net.DialTimeout("tcp", st.Addresses[nextIndex], time.Second*5)
+			if err == nil {
+				tcpConnection.CurrentServerAddr = st.Addresses[nextIndex]
+				tcpConnection.CurrentServerIndex = nextIndex
+				tcpConnection.Conn = conn
+				break
+			}
 		}
 		if index == nextIndex {
 			break

@@ -40,9 +40,9 @@ func (st *GraceTCPConnectionPool) CreateTopic(topic string) ResponseMessage {
 	}
 	// 集群创建话题
 	for _, addr := range st.Addresses {
-		conn, err := net.DialTimeout("tcp", addr.Addr, time.Second*5)
+		conn, err := net.DialTimeout("tcp", addr, time.Second*5)
 		if err != nil {
-			filedRes = append(filedRes, addr.Addr+" 连接失败")
+			filedRes = append(filedRes, addr+" 连接失败")
 			continue
 		} else {
 			// 查询话题列表
@@ -54,7 +54,7 @@ func (st *GraceTCPConnectionPool) CreateTopic(topic string) ResponseMessage {
 			// 写消息
 			_, err := conn.Write(messageByte)
 			if err != nil {
-				filedRes = append(filedRes, addr.Addr+" 请求失败")
+				filedRes = append(filedRes, addr+" 请求失败")
 				continue
 			}
 			// 等待响应
@@ -62,7 +62,7 @@ func (st *GraceTCPConnectionPool) CreateTopic(topic string) ResponseMessage {
 			buf := make([]byte, 5120)
 			n, err := conn.Read(buf)
 			if err != nil {
-				filedRes = append(filedRes, addr.Addr+" 创建话题失败")
+				filedRes = append(filedRes, addr+" 创建话题失败")
 				continue
 			}
 			// 执行成功
@@ -71,10 +71,10 @@ func (st *GraceTCPConnectionPool) CreateTopic(topic string) ResponseMessage {
 			buf = buf[0:n]
 			err = json.Unmarshal(buf, &responseMessage)
 			if err == nil {
-				successedRes = append(successedRes, addr.Addr+" "+responseMessage.Data)
+				successedRes = append(successedRes, addr+" "+responseMessage.Data)
 			} else {
 				responseMessage.Errcode = 400440
-				filedRes = append(filedRes, addr.Addr+" 创建话题失败")
+				filedRes = append(filedRes, addr+" 创建话题失败")
 			}
 		}
 	}
@@ -115,50 +115,25 @@ func (st *GraceTCPConnectionPool) SendAndReceive(message any) ResponseMessage {
 		responseMessage.Data = "消息数据错误"
 		return responseMessage
 	}
-	doNumber := 1
-SendMessageTip:
+	// 从通道获取一个连接
 	tcpConnectionST := <-st.Channel
-	// fmt.Printf(
-	// 	"ServerAddr:%v CurrentServerAddr:%v Status:%v CurrentServerIndex:%v ServerIndex:%v\n",
-	// 	tcpConnectionST.ServerAddr,
-	// 	tcpConnectionST.CurrentServerAddr,
-	// 	tcpConnectionST.Status,
-	// 	tcpConnectionST.CurrentServerIndex,
-	// 	tcpConnectionST.ServerIndex,
-	// )
-	// 检查连接有效性
-	// 当前连接无效
-	if tcpConnectionST.Conn == nil || !tcpConnectionST.Status {
-		// 无效的连接放回连接池
-		// 系统会自动重连
-		if tcpConnectionST.ServerIndex != -1 {
-			st.Channel <- tcpConnectionST
-		}
-		if doNumber < st.AddressesLen+1 {
-			// 重新取一个连接
-			doNumber++
-			goto SendMessageTip
-		} else {
-			responseMessage.Errcode = 400400
-			responseMessage.Data = "消息发送失败 : 服务端连接失败"
-			return responseMessage
-		}
-	}
-
+	// 最终给回连接池
+	defer func() {
+		st.Channel <- tcpConnectionST
+	}()
+	doNumber := 1
+WriteMsgTip:
 	// 写消息
 	_, err = tcpConnectionST.Conn.Write(messageByte)
 	if err != nil {
-		// 写入失败
-		// 如果连接来自连接池，更新连接状态
-		if tcpConnectionST.ServerIndex != -1 {
-			tcpConnectionST.Status = false
-			// 无效的连接放回连接池
-			// 系统会自动重连
-			st.Channel <- tcpConnectionST
-		}
-		if doNumber < st.AddressesLen+1 {
+		// 写入失败 尝试重连
+		if doNumber < 2 {
 			doNumber++
-			goto SendMessageTip
+			tcpConnectionSTNew, err := st.GetAnAvailableConn(tcpConnectionST.CurrentServerIndex)
+			if err == nil {
+				tcpConnectionST = &tcpConnectionSTNew
+				goto WriteMsgTip
+			}
 		}
 		responseMessage.Errcode = 400410
 		responseMessage.Data = "消息发送失败"
@@ -168,29 +143,21 @@ SendMessageTip:
 	// 监听服务端响应
 	buf := make([]byte, 3072)
 	n, err := tcpConnectionST.Conn.Read(buf)
+
 	// err != nil 代表服务端断开
 	if err != nil {
-		// 如果连接来自连接池，更新连接状态
-		if tcpConnectionST.ServerIndex != -1 {
-			tcpConnectionST.Status = false
-			// 无效的连接放回连接池
-			// 系统会自动重连
-			st.Channel <- tcpConnectionST
-		}
-		if doNumber < st.AddressesLen+1 {
-			doNumber++
-			goto SendMessageTip
-		}
 		responseMessage.Errcode = 400430
 		responseMessage.Data = "服务端已断开"
 		return responseMessage
 	}
-
-	// 执行成功
-	st.Channel <- tcpConnectionST
 	buf = buf[0:n]
 	err = json.Unmarshal(buf, &responseMessage)
+	// 交互成功
 	if err == nil {
+		// 修正连接
+		if st.AddressesLen > 1 {
+			st.CorrectConnection(tcpConnectionST)
+		}
 		return responseMessage
 	}
 	responseMessage.Errcode = 400440

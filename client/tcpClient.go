@@ -13,7 +13,6 @@ func New(addr string) (*TCPConnection, error) {
 	tcpConnection := &TCPConnection{
 		ServerIndex:        0,
 		CurrentServerIndex: 0,
-		Status:             false,
 	}
 	conn, err := net.DialTimeout("tcp", addr, time.Second*5)
 	if err != nil {
@@ -21,14 +20,13 @@ func New(addr string) (*TCPConnection, error) {
 	}
 	tcpConnection.CurrentServerAddr = addr
 	tcpConnection.Conn = conn
-	tcpConnection.Status = true
 	return tcpConnection, nil
 }
 
 // 发生及接收消息
 func (st *TCPConnection) SendAndReceive(message any, toJson bool) ([]byte, error) {
 
-	if !st.Status {
+	if st.Conn == nil {
 		return nil, errors.New("TCP 服务错误")
 	}
 	var messageByte []byte

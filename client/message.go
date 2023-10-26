@@ -116,11 +116,31 @@ func (st *GraceTCPConnectionPool) SendAndReceive(message any) ResponseMessage {
 		return responseMessage
 	}
 	// 从通道获取一个连接
-	tcpConnectionST := <-st.Channel
-	// 最终给回连接池
-	defer func() {
-		st.Channel <- tcpConnectionST
-	}()
+	var tcpConnectionST *TCPConnection
+	select {
+	//从连接池获取连接成功
+	case tcpConnectionST = <-st.Channel:
+		// 使用完毕后给回连接池
+		defer func() {
+			st.Channel <- tcpConnectionST
+		}()
+	// 3秒钟 仍无法获取到可用连接
+	// 新建一个连接
+	case <-time.After(time.Second * 3):
+		tcpConnectionSTNew, err := st.GetAnAvailableConn(0)
+		if err == nil {
+			tcpConnectionST = &tcpConnectionSTNew
+			tcpConnectionST.ServerIndex = -1
+			// 使用完毕后关闭连接
+			defer func() {
+				tcpConnectionST.Conn.Close()
+			}()
+		} else {
+			responseMessage.Errcode = 500600
+			responseMessage.Data = "无可用连接"
+			return responseMessage
+		}
+	}
 	doNumber := 1
 WriteMsgTip:
 	// 写消息
